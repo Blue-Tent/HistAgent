@@ -269,6 +269,10 @@ class LiteratureSearchBrowser:
                 containers = soup.find_all('div', class_='bHexk Tz5Hvf')
                 
                 book_matches = []
+                # --- Patch contributed by @sukirk (2025-10)
+                # Fixed: Incorrect return format in extract_book_matches
+                # Original bug: returned raw containers instead of structured book match entries
+                # This patch refactors extraction logic for title, link, and snippet consistency.
                 for container in containers:
                     # Try to find the title and content within this container
                     title_elem = container.find('h3', class_=lambda c: c and 'LC20lb' in c)
@@ -281,23 +285,29 @@ class LiteratureSearchBrowser:
                         # Find the span after VNSPub that contains the content
                         content_span = vnspub_elem.find_next_sibling('span')
                         if content_span:
-                            content_text = content_span.get_text(strip=False)
+                            # 关联的链接（若有）
+                            link_tag = container.find('a')
+                            book_link = link_tag['href'] if link_tag and link_tag.has_attr('href') else ''
                             
-                            # Create book match entry with the same structure as original code
+                            snippet_html = str(content_span)
+                            snippet_text = content_span.get_text()
+                            highlights = [em.get_text() for em in content_span.find_all('em')]
+                            
                             book_match = {
-                                'title': book_title,
-                                'heading': vnspub_elem.get_text(strip=True),
-                                'content': content_text
+                                'book_title': book_title,
+                                'book_link': book_link,
+                                'snippet_html': snippet_html,
+                                'snippet_text': snippet_text,
+                                'highlights': highlights
                             }
-                            
                             book_matches.append(book_match)
                 
                 print(f"Found {len(book_matches)} book matches")
                 
                 for result in book_matches:
-                    print(f"\nTitle: {result['title']}")
-                    print(f"Heading: {result['heading']}")
-                    print(f"Content: {result['content']}")
+                    print(f"\nTitle: {result['book_title']}")
+                    print(f"Link: {result.get('book_link', 'N/A')}")
+                    print(f"Snippet HTML: {result.get('snippet_html', 'N/A')}")
                     print('-' * 50)
                 
                 # If no results were found, provide debugging information
@@ -1160,10 +1170,12 @@ class BookMatchExtractorTool(Tool):
         Returns:
             Formatted string containing the extracted book match snippets
         """
-        results = await self.browser.extract_book_matches(query, max_steps)
+        # Browser returns (search_url, list_of_matches)
+        # results = await self.browser.extract_book_matches(query, max_steps)
         
-        search_url = results.get("search_url", None)
-        book_matches = results.get("book_matches", None)
+        # search_url = results.get("search_url", None)
+        # book_matches = results.get("book_matches", None)
+        search_url, book_matches = await self.browser.extract_book_matches(query, max_steps)
         print("results", results)
         
         if not book_matches:
