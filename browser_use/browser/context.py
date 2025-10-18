@@ -220,15 +220,14 @@ class BrowserContext:
 		"""Cleanup when object is destroyed"""
 		if not self.config._force_keep_context_alive and self.session is not None:
 			logger.debug('BrowserContext was not properly closed before destruction')
+			# Avoid calling asyncio.run during destruction; only schedule when a running loop exists
 			try:
-				# Use sync Playwright method for force cleanup
-				if hasattr(self.session.context, '_impl_obj'):
-					asyncio.run(self.session.context._impl_obj.close())
-
-				self.session = None
-				gc.collect()
-			except Exception as e:
-				logger.warning(f'Failed to force close browser context: {e}')
+				loop = asyncio.get_running_loop()
+				if loop.is_running():
+					loop.create_task(self.close())
+			except Exception:
+				# If no running loop, skip async cleanup and rely on process teardown
+				pass
 
 	@time_execution_async('--initialize_session')
 	async def _initialize_session(self):

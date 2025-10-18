@@ -247,7 +247,5 @@ class Browser:
 				loop = asyncio.get_running_loop()
 				if loop.is_running():
 					loop.create_task(self.close())
-				else:
-					asyncio.run(self.close())
 		except Exception as e:
 			logger.debug(f'Failed to cleanup browser in destructor: {e}')

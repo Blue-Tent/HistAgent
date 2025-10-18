@@ -149,6 +149,12 @@ You are a web browser assistant that helps users navigate and extract content fr
             error_msg = f"Error executing browser task: {str(e)}"
             logging.error(error_msg)
             return error_msg
+        finally:
+            # Ensure browser is closed within the same event loop
+            try:
+                await self.close()
+            except Exception:
+                pass
 
     async def close(self):
         """Close the browser if it's open."""
@@ -196,7 +202,6 @@ class BrowserTool(Tool):
         """
         try:
             result = asyncio.run(self.agent.execute_task(task, max_steps))
-            self.agent.close()
             return result or "No information found."
         except Exception as e:
             error_msg = f"Error searching information: {str(e)}"
