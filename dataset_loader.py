@@ -35,6 +35,17 @@ def load_custom_dataset(
     if is_json:
         sheet_name = None
     
+    # Normalize level arguments like 'level1', 'level_1' to 'level 1'
+    if is_excel and isinstance(sheet_name, str):
+        key = sheet_name.strip().lower()
+        level_map = {
+            "level1": "level 1", "level 1": "level 1", "level_1": "level 1",
+            "level2": "level 2", "level 2": "level 2", "level_2": "level 2",
+            "level3": "level 3", "level 3": "level 3", "level_3": "level 3",
+        }
+        if key in level_map:
+            sheet_name = level_map[key]
+    
     if not (is_json or is_excel):
         print(f"Unsupported file type: {file_ext}, only JSON and Excel are supported")
         return Dataset.from_pandas(pd.DataFrame({
@@ -308,22 +319,30 @@ def load_custom_dataset(
                 # Merge all sheet data
                 df = pd.concat(all_data, ignore_index=True)
             else:
-                # Read specified sheet
+                # Read specified sheet; if missing, fallback to the first sheet
                 try:
                     df = pd.read_excel(file_path, sheet_name=sheet_name)
                     df["task"] = str(sheet_name)  # Use sheet name as task name
                 except Exception as e:
                     print(f"Error reading sheet {sheet_name}: {e}")
-                    return Dataset.from_pandas(pd.DataFrame({
-                        "task_id": ["1"],
-                        "question": ["Example question"],
-                        "true_answer": ["Example answer"],
-                        "task": ["Example task"],
-                        "file_name": [""],
-                        "file_type": [""],
-                        "file_tool": [""],
-                        "answer_type": [""]
-                    }))
+                    try:
+                        xls = pd.ExcelFile(file_path)
+                        fallback_sheet = xls.sheet_names[0]
+                        print(f"Falling back to first sheet: {fallback_sheet}")
+                        df = pd.read_excel(file_path, sheet_name=fallback_sheet)
+                        df["task"] = str(fallback_sheet)
+                    except Exception as e2:
+                        print(f"Fallback read failed: {e2}")
+                        return Dataset.from_pandas(pd.DataFrame({
+                            "task_id": ["1"],
+                            "question": ["Example question"],
+                            "true_answer": ["Example answer"],
+                            "task": ["Example task"],
+                            "file_name": [""],
+                            "file_type": [""],
+                            "file_tool": [""],
+                            "answer_type": [""]
+                        }))
     except Exception as e:
         print(f"Error loading file: {e}")
         return Dataset.from_pandas(pd.DataFrame({
@@ -337,18 +356,49 @@ def load_custom_dataset(
             "answer_type": [""]
         }))
     
+    # If Excel and a level-like sheet_name is provided, filter by Level/level column
+    if is_excel and isinstance(sheet_name, str):
+        key = sheet_name.strip().lower()
+        import re
+        m = re.match(r"level[ _]?(\d+)", key)
+        if m:
+            try:
+                target_level = int(m.group(1))
+                # find the level column case-insensitively
+                level_col = None
+                for col in df.columns:
+                    if str(col).strip().lower() == "level":
+                        level_col = col
+                        break
+                if level_col is not None:
+                    # numeric match or string fallback
+                    lv_num = pd.to_numeric(df[level_col], errors='coerce')
+                    mask = (lv_num == target_level) | (df[level_col].astype(str).str.strip() == str(target_level))
+                    before = len(df)
+                    df = df[mask].copy()
+                    print(f"Applied level filter: level {target_level}, rows {before} -> {len(df)}")
+                    # set task to standardized level label
+                    df["task"] = f"level {target_level}"
+                else:
+                    print("Warning: 'Level' column not found; skip level filtering")
+            except Exception as e:
+                print(f"Error applying level filter: {e}")
+
     # Define column mapping
     column_mapping = {
         "ID": "task_id",
+        "task_id": "task_id",  # already normalized in some files
         "Question": "question",
         "Answer": "true_answer",
-        "Data Requirements": "data_requirement",  # Renamed to data_requirement for accuracy
+        "Final answer": "true_answer",  # support alt column name
+        "Data Requirements": "data_requirement",
+        "file_name": "data_requirement",  # support alt column name
         "Answer Type": "answer_type"
     }
     
     # Apply column renaming
     for old_col, new_col in column_mapping.items():
-        if old_col in df.columns:
+        if old_col in df.columns and old_col != new_col:
             df = df.rename(columns={old_col: new_col})
     
     # Add missing columns

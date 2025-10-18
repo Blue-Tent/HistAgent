@@ -220,7 +220,7 @@ custom_role_conversions = {"tool-call": "assistant", "tool-response": "user"}
 # eval_ds = datasets.load_dataset("gaia-benchmark/GAIA", "2023_all")[SET]
 # eval_ds = eval_ds.rename_columns({"Question": "question", "Final answer": "true_answer", "Level": "task"})
 
-RELATIVE_EXCEL_PATH = "Historical/HistBench/HistBench.xlsx"
+RELATIVE_EXCEL_PATH = "HistBench/HistBench.xlsx"
 # RELATIVE_EXCEL_PATH = "Historical/Historical/Historical Q&A collections(100).xlsx"
 
 EXCEL_PATH = os.path.abspath(RELATIVE_EXCEL_PATH)
@@ -877,7 +877,7 @@ If you encounter any issues:
         managed_agents.append(Chinese_agent)
 
     if use_video_agent:
-    managed_agents.append(video_agent)
+        managed_agents.append(video_agent)
 
     manager_agent = CodeAgent(
         model=model,
@@ -1547,14 +1547,21 @@ def get_examples_to_answer(answers_file, eval_ds, args=None) -> List[dict]:
             level_prefix = f"level_{args.level.replace('level', '')}_"  # For example, "level_1_"
             # print(level_prefix)
             for id in question_ids:
-                if id.startswith(level_prefix):
-                    full_ids.append(id)
+                # If dataset uses numeric task_id, allow numeric matching
+                if id.isdigit():
+                    for example in examples:
+                        tid = str(example.get("task_id", ""))
+                        if tid == id or tid == f"{level_prefix}{id}":
+                            filtered_examples.append(example)
                 else:
-                    full_ids.append(f"{level_prefix}{id}")
-            # Filter questions
-            for example in examples:
-                if example.get("task_id") in full_ids:
-                    filtered_examples.append(example)
+                    if id.startswith(level_prefix):
+                        full_ids.append(id)
+                    else:
+                        full_ids.append(f"{level_prefix}{id}")
+            if full_ids:
+                for example in examples:
+                    if str(example.get("task_id")) in full_ids:
+                        filtered_examples.append(example)
         
         # Process ID range
         elif args.start_id is not None or args.end_id is not None:
