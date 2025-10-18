@@ -167,6 +167,20 @@ HistAgent requires a modified `browser_use` library for enhanced capabilities. E
 
 2. **Install the modified version of `browser_use`**: Manually replace it after identifying your environment directory.
 
+### Step 5: Download HistBench Dataset
+
+Make sure `git-lfs` is installed and then clone the dataset from Hugging Face:
+
+```bash
+# Make sure git-lfs is installed (https://git-lfs.com)
+git lfs install
+
+git clone https://huggingface.co/datasets/jiahaoq/HistBench
+
+# If you want to clone without large files - just their pointers
+GIT_LFS_SKIP_SMUDGE=1 git clone https://huggingface.co/datasets/jiahaoq/HistBench
+```
+
 ## ⚙️ Environment Configuration
 
 Several API keys are needed for HistAgent's operation. Configure these either via a `.env` file or set them as environment variables in your system.
